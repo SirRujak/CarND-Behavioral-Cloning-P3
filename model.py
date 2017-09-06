@@ -8,7 +8,8 @@ with open('./data/driving_log.csv') as csvfile:
         samples.append(line)
 
 from sklearn.model_selection import train_test_split
-train_samples, validation_samples = train_test_split(samples, test_size=0.2, shuffle=False)
+train_samples, validation_samples = train_test_split(samples, test_size=0.2,
+                                                     shuffle=False)
 
 import cv2
 import numpy as np
@@ -50,6 +51,7 @@ def generator(samples, batch_size=32, num_frames=6,
                 #print(temp_image.shape)
                 image_sets.append(temp_image)
             X_train = np.stack(image_sets)
+            print(X_train.shape)
             ## Only use the last of each set of frames for predicting.
             y_train = np.array(angles[:-num_frames])
 
@@ -65,22 +67,49 @@ train_generator = generator(train_samples,
 validation_generator = generator(validation_samples,
                                  batch_size=32, num_frames=6)
 
-print(next(train_generator)[0].shape)
+#print(next(train_generator)[0].shape)
 
 num_frames = 6
-ch, row, col = 3 * num_frames, 80, 320  # Trimmed image format
+ch, row, col = 3 * num_frames, 160, 320  # Trimmed image format *not really*
 
+from keras.layers import Conv2D, MaxPooling2D, Input, Lambda, merge, Dense, Flatten
+from keras.models import Model
 
-model = Sequential()
+input_data = Input(shape=(row, col, ch), name="Main_Input")
+reg_lambda = Lambda(lambda x: x/127.5 - 1.,
+                   input_shape=(row, col, ch),
+                   output_shape=(row, col, ch))
+input_img = reg_lambda(input_data)
+
+tower_1 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_img)
+tower_1 = Conv2D(64, 3, 3, border_mode='same', activation='relu')(tower_1)
+
+tower_2 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_img)
+tower_2 = Conv2D(64, 5, 5, border_mode='same', activation='relu')(tower_2)
+
+tower_3 = MaxPooling2D((3, 3), strides=(1, 1), border_mode='same')(input_img)
+tower_3 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(tower_3)
+
+concat_layer = merge([tower_1, tower_2, tower_3], mode='concat', concat_axis=1,
+                                  name="Main_Output")
+
+flat_layer = Flatten()(concat_layer)
+
+fc1 = Dense(64, activation='relu')(flat_layer)
+
+output = Dense(1)(fc1)
+
+regression_model = Model(input=input_data, output=output)
+
+#model = Sequential()
 # Preprocess incoming data, centered around zero with small standard deviation
-model.add(Lambda(lambda x: x/127.5 - 1.,
-        input_shape=(ch, row, col),
-        output_shape=(ch, row, col)))
+#model.add(Lambda(lambda x: x/127.5 - 1.,
+#        input_shape=(ch, row, col),
+#        output_shape=(ch, row, col)))
 #model.add(... finish defining the rest of your model architecture here ...)
 
-model.compile(loss='mse', optimizer='adam')
-'''
-model.fit_generator(train_generator, samples_per_epoch= /
-            len(train_samples), validation_data=validation_generator, /
+regression_model.compile(loss='mse', optimizer='adam')
+
+regression_model.fit_generator(train_generator, samples_per_epoch=len(train_samples),
+            validation_data=validation_generator,
             nb_val_samples=len(validation_samples), nb_epoch=3)
-'''
