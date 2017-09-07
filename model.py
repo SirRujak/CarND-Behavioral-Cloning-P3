@@ -22,7 +22,7 @@ def generator(samples, batch_size=32, num_frames=6,
     num_samples = len(samples)
     while 1: # Loop forever so the generator never terminates
         ##shuffle(samples)
-        for offset in range(0, num_samples, batch_size + num_frames):
+        for offset in range(0, num_samples - batch_size - num_frames, batch_size + num_frames):
             batch_samples = samples[offset:offset+batch_size + num_frames]
 
             images = []
@@ -44,7 +44,7 @@ def generator(samples, batch_size=32, num_frames=6,
                 ## Get slices.
                 temp_image = images[i:i+num_frames]
                 ## Reshape slices to be of the proper shape.
-                temp_image = np.array(temp_image)
+                temp_image = np.stack(temp_image)
                 #print(temp_image.shape)
                 temp_image = temp_image.reshape(
                     (img_size_y, img_size_x, num_channels * num_frames))
@@ -76,28 +76,31 @@ from keras.layers import Conv2D, MaxPooling2D, Input, Lambda, merge, Dense, Flat
 from keras.models import Model
 
 input_data = Input(shape=(row, col, ch), name="Main_Input")
+'''
 reg_lambda = Lambda(lambda x: x/127.5 - 1.,
                    input_shape=(row, col, ch),
                    output_shape=(row, col, ch))
 input_img = reg_lambda(input_data)
+'''
 
-tower_1 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_img)
+tower_1 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_data)
 tower_1 = Conv2D(64, 3, 3, border_mode='same', activation='relu')(tower_1)
 
-tower_2 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_img)
+tower_2 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(input_data)
 tower_2 = Conv2D(64, 5, 5, border_mode='same', activation='relu')(tower_2)
 
-tower_3 = MaxPooling2D((3, 3), strides=(1, 1), border_mode='same')(input_img)
-tower_3 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(tower_3)
+#tower_3 = MaxPooling2D((3, 3), strides=(1, 1), border_mode='same')(input_img)
+#tower_3 = Conv2D(64, 1, 1, border_mode='same', activation='relu')(tower_3)
 
-concat_layer = merge([tower_1, tower_2, tower_3], mode='concat', concat_axis=1,
+concat_layer = merge([tower_1, tower_2], mode='concat', concat_axis=1,
                                   name="Main_Output")
 
 flat_layer = Flatten()(concat_layer)
 
-fc1 = Dense(64, activation='relu')(flat_layer)
+#fc1 = Dense(64, activation='relu')(flat_layer)
 
-output = Dense(1)(fc1)
+
+output = Dense(1)(flat_layer)
 
 regression_model = Model(input=input_data, output=output)
 
@@ -110,6 +113,11 @@ regression_model = Model(input=input_data, output=output)
 
 regression_model.compile(loss='mse', optimizer='adam')
 
+#batch_data = next(train_generator)
+#regression_model.train_on_batch(batch_data[0], batch_data[1])
+
+
 regression_model.fit_generator(train_generator, samples_per_epoch=len(train_samples),
             validation_data=validation_generator,
-            nb_val_samples=len(validation_samples), nb_epoch=3)
+            nb_val_samples=len(validation_samples), nb_epoch=3, max_q_size=1)
+regression_model.save("model.h5")
