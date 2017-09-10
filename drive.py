@@ -16,13 +16,6 @@ from keras.models import load_model
 import h5py
 from keras import __version__ as keras_version
 
-
-sio = socketio.Server()
-app = Flask(__name__)
-model = None
-prev_image_array = None
-
-
 class SimplePIController:
     def __init__(self, Kp, Ki):
         self.Kp = Kp
@@ -44,15 +37,26 @@ class SimplePIController:
         return self.Kp * self.error + self.Ki * self.integral
 
 
-controller = SimplePIController(0.1, 0.002)
-set_speed = 9
-controller.set_desired(set_speed)
+sio = socketio.Server()
+app = Flask(__name__)
 
-num_frames = 6
-img_shape = [160, 320, 3]
-last_frames = np.zeros((img_shape[0], img_shape[1], img_shape[2] * num_frames))
-print(last_frames.shape)
+class Driver:
+    def __init__(self):
+        self.model = None
+        self.prev_image_array = None
 
+
+        self.controller = SimplePIController(0.1, 0.002)
+        self.set_speed = 30
+        self.controller.set_desired(self.set_speed)
+
+        self.num_frames = 6
+        self.img_shape = [160, 320, 3]
+        self.last_frames = np.zeros((self.img_shape[0], self.img_shape[1],
+                                     self.img_shape[2] * self.num_frames))
+        print(self.last_frames.shape)
+
+driver = Driver()
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -67,18 +71,20 @@ def telemetry(sid, data):
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
         image_array = np.asarray(image)
-        print(last_frames.shape)
+        #print(driver.last_frames)
 
-        #last_frames_rolled = np.roll(last_frames, -img_shape[2], axis=2)
-        last_frames[:, :, -img_shape[2]:] = image_array
+        driver.last_frames = np.roll(driver.last_frames,
+                                   -driver.img_shape[2], axis=2)
+        driver.last_frames[:, :, -driver.img_shape[2]:] = image_array
 
-        steering_angle = float(model.predict(last_frames[None, :, :, :], batch_size=1))
-        #steering_angle = float(model.predict(image_array[None, :, :, :], batch_size=1))
+        driver.steering_angle = float(driver.model.predict(
+                driver.last_frames[None, :, :, :], batch_size=1))
+        #driver.steering_angle = float(driver.model.predict(image_array[None, :, :, :], batch_size=1))
 
-        throttle = controller.update(float(speed))
+        driver.throttle = driver.controller.update(float(speed))
 
-        print(steering_angle, throttle)
-        send_control(steering_angle, throttle)
+        print(driver.steering_angle, driver.throttle)
+        send_control(driver.steering_angle, driver.throttle)
 
         # save frame
         if args.image_folder != '':
@@ -131,7 +137,7 @@ if __name__ == '__main__':
         print('You are using Keras version ', keras_version,
               ', but the model was built using ', model_version)
 
-    model = load_model(args.model)
+    driver.model = load_model(args.model)
 
     if args.image_folder != '':
         print("Creating image folder at {}".format(args.image_folder))
