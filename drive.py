@@ -1,6 +1,7 @@
 import argparse
 import base64
 from datetime import datetime
+import json
 import os
 import shutil
 
@@ -41,22 +42,31 @@ sio = socketio.Server()
 app = Flask(__name__)
 
 class Driver:
-    def __init__(self):
+    def __init__(self, file_name):
         self.model = None
         self.prev_image_array = None
 
 
         self.controller = SimplePIController(0.1, 0.002)
-        self.set_speed = 30
+        self.set_speed = 15
         self.controller.set_desired(self.set_speed)
 
         self.num_frames = 6
         self.img_shape = [160, 320, 3]
         self.last_frames = np.zeros((self.img_shape[0], self.img_shape[1],
                                      self.img_shape[2] * self.num_frames))
+        self.angle_dictionary = self.load_angles(file_name)
+        print(self.angle_dictionary)
+
         print(self.last_frames.shape)
 
-driver = Driver()
+    def load_angles(self, file_name):
+        with open(file_name) as f:
+            data = json.load(f)
+        return data
+
+file_name = "angle_dictionary.json"
+driver = Driver(file_name)
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -70,6 +80,7 @@ def telemetry(sid, data):
         # The current image from the center camera of the car
         imgString = data["image"]
         image = Image.open(BytesIO(base64.b64decode(imgString)))
+        #print(image.mode)
         image_array = np.asarray(image)
         #print(driver.last_frames)
 
@@ -77,9 +88,14 @@ def telemetry(sid, data):
                                    -driver.img_shape[2], axis=2)
         driver.last_frames[:, :, -driver.img_shape[2]:] = image_array
 
-        driver.steering_angle = float(driver.model.predict(
-                driver.last_frames[None, :, :, :], batch_size=1))
-        #driver.steering_angle = float(driver.model.predict(image_array[None, :, :, :], batch_size=1))
+        ## TODO: Load the angle_dictionary.json
+        #prediction = np.argmax(driver.model.predict(
+        #        driver.last_frames[None, :, :, :], batch_size=1))
+        #driver.steering_angle = driver.angle_dictionary[str(prediction)]
+
+        #driver.steering_angle = float(driver.model.predict(
+        #        driver.last_frames[None, :, :, :], batch_size=1))
+        driver.steering_angle = float(driver.model.predict(image_array[None, :, :, :], batch_size=1))
 
         driver.throttle = driver.controller.update(float(speed))
 
