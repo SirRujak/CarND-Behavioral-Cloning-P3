@@ -55,8 +55,8 @@ class Driver:
         self.img_shape = [160, 320, 3]
         self.last_frames = np.zeros((self.img_shape[0], self.img_shape[1],
                                      self.img_shape[2] * self.num_frames))
-        self.angle_dictionary = self.load_angles(file_name)
-        print(self.angle_dictionary)
+        #self.angle_dictionary = self.load_angles(file_name)
+        #print(self.angle_dictionary)
 
         print(self.last_frames.shape)
 

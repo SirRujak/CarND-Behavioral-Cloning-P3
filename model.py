@@ -9,7 +9,7 @@ from scipy.stats.mstats import mquantiles
 
 
 samples = []
-driving_logs = ['hard-1', 'hard-2-back', '1-back', 'gentle-driving']
+driving_logs = ['hard-2-back', '1-back', 'gentle-driving']
 ## The keys are to say if you should reverse it.
 driving_keys = [True, True, False, False]
 steering_angles = []
@@ -63,14 +63,14 @@ def generator(samples_list, directory_list, batch_size=32,
                 left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)
                 left_image_flipped = np.fliplr(left_image)
                 #print(center_image)
-                left_angle = center_angle + .5
+                left_angle = center_angle + .6
                 left_angle_flipped = -left_angle
 
                 right_image = cv2.imread(right_name)
                 right_image = cv2.cvtColor(right_image, cv2.COLOR_BGR2RGB)
                 right_image_flipped = np.fliplr(right_image)
                 #print(center_image)
-                right_angle = center_angle -.5
+                right_angle = center_angle -.6
                 right_angle_flipped = -right_angle
 
                 images.append(center_image)
@@ -126,6 +126,7 @@ classification_model.add(Convolution2D(64, 3, 3, activation="relu"))
 classification_model.add(Convolution2D(64, 3, 3, activation="relu"))
 classification_model.add(Flatten())
 classification_model.add(Dense(1024, activation="relu"))
+classification_model.add(Dropout(0.5))
 classification_model.add(Dense(100))
 classification_model.add(Dense(50))
 classification_model.add(Dense(10))
